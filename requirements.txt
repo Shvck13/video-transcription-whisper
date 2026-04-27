@@ -1,19 +1,19 @@
 # =============================================
 #  requirements.txt
-#  Instalar con:  pip install -r requirements.txt
+#  Install with:  pip install -r requirements.txt
 # =============================================
 
-# Descarga de vídeos/audio de más de 1000 sitios
+# Video/audio download from 1,000+ sites
 yt-dlp>=2024.1.0
 
-# Transcripción de audio a texto (modelo Whisper de OpenAI)
+# Audio-to-text transcription (OpenAI Whisper)
 openai-whisper>=20231117
 
-# Necesario para Whisper (deep learning)
+# Required by Whisper (deep learning backend)
 torch>=2.0.0
 
-# Procesamiento de audio (requerido por Whisper)
+# Audio processing
 numpy>=1.24.0
 
-# Transformers de audio (requerido internamente por Whisper)
+# Tokenizer used internally by Whisper
 tiktoken>=0.5.0
