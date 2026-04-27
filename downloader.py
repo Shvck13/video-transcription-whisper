@@ -1,15 +1,12 @@
 # =============================================
-#  downloader.py — Descarga de audio con yt-dlp
+#  downloader.py — Audio download via yt-dlp
 # =============================================
-#
-#  Soporta: YouTube, Vimeo, Twitter/X, TikTok,
-#           Instagram, Facebook, Twitch, SoundCloud
-#           y +1 000 sitios más (lista completa en
-#           https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)
+#  Supports YouTube, Vimeo, Twitter/X, TikTok,
+#  Instagram, Facebook, Twitch, SoundCloud and
+#  1,000+ more sites.
 # =============================================
 
 import os
-import re
 import logging
 
 import yt_dlp
@@ -20,63 +17,43 @@ from utils import ensure_dirs
 logger = logging.getLogger(__name__)
 
 
-# ------------------------------------------------------------------
-# Clase principal de descarga
-# ------------------------------------------------------------------
-
 class AudioDownloader:
-    """Descarga el audio de un vídeo usando yt-dlp."""
+    """Downloads audio from a video URL using yt-dlp."""
 
     def __init__(self):
         ensure_dirs()
         self._title: str = "video"
 
-    # ------------------------------------------------------------------
-    # API pública
-    # ------------------------------------------------------------------
-
     def download(self, url: str) -> tuple[str, str]:
         """
-        Descarga el audio de *url* y lo guarda en AUDIO_DIR.
+        Downloads audio from *url* and saves it to AUDIO_DIR.
 
         Returns:
-            (filepath, title)  — ruta del archivo de audio y título del vídeo.
+            (filepath, title)
 
         Raises:
-            RuntimeError si la descarga falla.
+            RuntimeError if the download fails.
         """
         url = url.strip()
-        logger.info(f"Iniciando descarga de: {url}")
-
-        output_template = os.path.join(AUDIO_DIR, "%(title)s.%(ext)s")
+        logger.info(f"Starting download: {url}")
 
         ydl_opts = {
             "format": AUDIO_FORMAT,
-            "outtmpl": output_template,
-            "postprocessors": [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": AUDIO_CODEC,
-                    "preferredquality": AUDIO_QUALITY,
-                }
-            ],
-            # Identificarse como cliente Android para evitar bloqueos de YouTube
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android", "web"],
-                }
-            },
-            # Callbacks
+            "outtmpl": os.path.join(AUDIO_DIR, "%(title)s.%(ext)s"),
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": AUDIO_CODEC,
+                "preferredquality": AUDIO_QUALITY,
+            }],
+            # Pretend to be an Android client — YouTube blocks requests otherwise
+            "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
             "progress_hooks": [self._progress_hook],
-            # Opciones de red y robustez
             "retries": 10,
             "fragment_retries": 10,
             "ignoreerrors": False,
             "nooverwrites": False,
-            # Silenciar la salida interna de yt-dlp (usamos nuestro logger)
             "quiet": True,
             "no_warnings": False,
-            # Extraer información antes de descargar para obtener el título
             "writethumbnail": False,
             "writeinfojson": False,
         }
@@ -86,59 +63,39 @@ class AudioDownloader:
                 info = ydl.extract_info(url, download=True)
                 self._title = info.get("title", "video")
         except yt_dlp.utils.DownloadError as e:
-            raise RuntimeError(f"Error al descargar el vídeo: {e}") from e
+            raise RuntimeError(f"Download error: {e}") from e
         except Exception as e:
-            raise RuntimeError(f"Error inesperado durante la descarga: {e}") from e
+            raise RuntimeError(f"Unexpected error during download: {e}") from e
 
         filepath = self._find_audio_file(self._title)
-        logger.info(f"Audio descargado: {filepath}")
+        logger.info(f"Audio saved: {filepath}")
         return filepath, self._title
 
-    # ------------------------------------------------------------------
-    # Métodos internos
-    # ------------------------------------------------------------------
-
     def _progress_hook(self, d: dict) -> None:
-        """Muestra el progreso de la descarga."""
+        # Print progress in-place so it doesn't spam the terminal
         status = d.get("status")
         if status == "downloading":
             percent = d.get("_percent_str", "?").strip()
             speed   = d.get("_speed_str", "?").strip()
             eta     = d.get("_eta_str", "?").strip()
-            print(f"\r  ⬇  Descargando: {percent}  |  Velocidad: {speed}  |  ETA: {eta}   ", end="", flush=True)
+            print(f"\r  ⬇  Downloading: {percent}  |  Speed: {speed}  |  ETA: {eta}   ", end="", flush=True)
         elif status == "finished":
-            print()  # salto de línea tras la barra de progreso
-            logger.info("Descarga completada. Procesando audio…")
+            print()
+            logger.info("Download complete. Processing audio…")
         elif status == "error":
             print()
-            logger.error("Error durante la descarga.")
+            logger.error("Error during download.")
 
     def _find_audio_file(self, title: str) -> str:
-        """
-        Busca el archivo de audio generado en AUDIO_DIR.
-        yt-dlp puede añadir caracteres especiales al nombre, así que
-        buscamos por extensión y tomamos el más reciente.
-        """
-        candidates = [
-            f for f in os.listdir(AUDIO_DIR)
-            if f.endswith(f".{AUDIO_CODEC}")
-        ]
+        # yt-dlp can mangle filenames, so instead of guessing we just grab
+        # the most recently modified file with the right extension
+        candidates = [f for f in os.listdir(AUDIO_DIR) if f.endswith(f".{AUDIO_CODEC}")]
         if not candidates:
-            raise RuntimeError(
-                f"No se encontró ningún archivo .{AUDIO_CODEC} en {AUDIO_DIR}"
-            )
-        # El más recientemente modificado
-        candidates.sort(
-            key=lambda f: os.path.getmtime(os.path.join(AUDIO_DIR, f)),
-            reverse=True,
-        )
+            raise RuntimeError(f"No .{AUDIO_CODEC} file found in {AUDIO_DIR}")
+        candidates.sort(key=lambda f: os.path.getmtime(os.path.join(AUDIO_DIR, f)), reverse=True)
         return os.path.join(AUDIO_DIR, candidates[0])
 
 
-# ------------------------------------------------------------------
-# Función de conveniencia
-# ------------------------------------------------------------------
-
 def download_audio(url: str) -> tuple[str, str]:
-    """Atajo para descargar audio sin instanciar la clase manualmente."""
+    """Shortcut to download audio without managing the class instance."""
     return AudioDownloader().download(url)
