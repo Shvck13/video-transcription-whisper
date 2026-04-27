@@ -51,6 +51,7 @@ def main() -> None:
 
     args = parse_args()
 
+    # If no URL was passed as an argument, ask for it interactively
     url = args.url or input("Enter video URL: ").strip()
     if not validate_url(url):
         logger.error(f"Invalid URL: '{url}'")
@@ -64,6 +65,7 @@ def main() -> None:
         audio_path, title = download_audio(url)
         print(f"  Ready: {title}\n")
 
+        # This is the slow part — model size and video length both matter
         print(" Transcribing (this may take a while depending on video length)…\n")
         result = transcribe_audio(audio_path, language=args.lang or WHISPER_LANGUAGE)
 
@@ -89,6 +91,7 @@ def main() -> None:
         logger.error(str(e))
         sys.exit(1)
     finally:
+        # Always clean up the temp audio unless the user explicitly asked to keep it
         if audio_path and not (args.keep_audio if args else False):
             cleanup_audio(audio_path)
 
