@@ -1,5 +1,5 @@
 # =============================================
-#  utils.py — Funciones auxiliares
+#  utils.py — Helper functions
 # =============================================
 
 import os
@@ -11,101 +11,66 @@ from datetime import timedelta
 
 from config import AUDIO_DIR, OUTPUT_DIR
 
-
-# ------------------------------------------------------------------
-# Logging
-# ------------------------------------------------------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%H:%M:%S",
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger(__name__)
 
 
-# ------------------------------------------------------------------
-# Gestión de directorios
-# ------------------------------------------------------------------
-
 def ensure_dirs() -> None:
-    """Crea los directorios necesarios si no existen."""
+    """Creates required directories if they don't exist."""
     os.makedirs(AUDIO_DIR, exist_ok=True)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 def cleanup_audio(filepath: str) -> None:
-    """Elimina el archivo de audio temporal."""
+    """Deletes a temporary audio file."""
     try:
         if filepath and os.path.exists(filepath):
             os.remove(filepath)
-            logger.info(f"Audio temporal eliminado: {filepath}")
+            logger.info(f"Temp audio deleted: {filepath}")
     except OSError as e:
-        logger.warning(f"No se pudo eliminar {filepath}: {e}")
+        # Not critical, just warn and move on
+        logger.warning(f"Could not delete {filepath}: {e}")
 
-
-# ------------------------------------------------------------------
-# Validación de URL
-# ------------------------------------------------------------------
 
 def validate_url(url: str) -> bool:
-    """Comprueba que la cadena tiene pinta de URL válida."""
+    """Checks whether the string looks like a valid URL."""
     pattern = re.compile(
-        r"^(https?://)?"           # http o https
-        r"([\w\-]+\.)+[\w\-]+"    # dominio
-        r"(:\d+)?"                 # puerto opcional
-        r"(/[\w\-./?%&=+#]*)?$",  # ruta/query
+        r"^(https?://)?([\w\-]+\.)+[\w\-]+(:\d+)?(/[\w\-./?%&=+#]*)?$",
         re.IGNORECASE,
     )
     return bool(pattern.match(url.strip()))
 
 
-# ------------------------------------------------------------------
-# Formato de timestamps
-# ------------------------------------------------------------------
-
 def seconds_to_timestamp(seconds: float) -> str:
-    """Convierte segundos a formato HH:MM:SS."""
-    td = timedelta(seconds=int(seconds))
-    total_seconds = int(td.total_seconds())
-    hours, remainder = divmod(total_seconds, 3600)
+    """Converts seconds to HH:MM:SS format."""
+    total = int(seconds)
+    hours, remainder = divmod(total, 3600)
     minutes, secs = divmod(remainder, 60)
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
-# ------------------------------------------------------------------
-# Guardar transcripción
-# ------------------------------------------------------------------
-
 def save_transcription(text: str, video_title: str, with_timestamps: bool = True) -> str:
-    """
-    Guarda la transcripción en un archivo .txt dentro de OUTPUT_DIR.
-    Devuelve la ruta del archivo guardado.
-    """
+    """Saves the transcription as a .txt file in OUTPUT_DIR. Returns the file path."""
     ensure_dirs()
 
-    # Limpiar caracteres no válidos para nombre de archivo
+    # Strip characters that would break the filename on any OS
     safe_title = re.sub(r'[\\/*?:"<>|]', "_", video_title)[:80]
-    filename = f"{safe_title}.txt"
-    filepath = os.path.join(OUTPUT_DIR, filename)
+    filepath = os.path.join(OUTPUT_DIR, f"{safe_title}.txt")
 
     with open(filepath, "w", encoding="utf-8") as f:
-        f.write(f"Título: {video_title}\n")
+        f.write(f"Title: {video_title}\n")
         f.write("=" * 60 + "\n\n")
         f.write(text)
 
-    logger.info(f"Transcripción guardada en: {filepath}")
+    logger.info(f"Transcription saved: {filepath}")
     return filepath
 
 
-# ------------------------------------------------------------------
-# Verificar dependencias externas
-# ------------------------------------------------------------------
-
 def check_ffmpeg() -> bool:
-    """Comprueba que ffmpeg está instalado en el sistema."""
+    """Checks whether ffmpeg is installed."""
     if shutil.which("ffmpeg") is None:
         logger.error(
-            "❌  ffmpeg no encontrado. Instálalo con:\n"
+            "❌  ffmpeg not found. Install it with:\n"
             "    • Linux/macOS:  sudo apt install ffmpeg  /  brew install ffmpeg\n"
             "    • Windows:      https://ffmpeg.org/download.html"
         )
@@ -114,20 +79,12 @@ def check_ffmpeg() -> bool:
 
 
 def check_dependencies() -> bool:
-    """Verifica todas las dependencias necesarias."""
-    ok = True
-
-    # ffmpeg
-    if not check_ffmpeg():
-        ok = False
-
-    # Librerías Python
-    required = {"yt_dlp": "yt-dlp", "whisper": "openai-whisper"}
-    for module, package in required.items():
+    """Verifies all required dependencies are available before doing anything."""
+    ok = check_ffmpeg()
+    for module, package in {"yt_dlp": "yt-dlp", "whisper": "openai-whisper"}.items():
         try:
             __import__(module)
         except ImportError:
-            logger.error(f"❌  Módulo '{module}' no encontrado. Instala con:  pip install {package}")
+            logger.error(f"❌  Module '{module}' not found. Install with:  pip install {package}")
             ok = False
-
     return ok
